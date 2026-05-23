@@ -265,3 +265,21 @@ function autoResize(el) {
   el.style.height = 'auto';
   el.style.height = Math.min(el.scrollHeight, 100) + 'px';
 }
+document.addEventListener('DOMContentLoaded', async () => {
+ // Pega token de teste
+ const token = await getTestToken();
+ if (token) {
+  await initChat(token);
+ }
+ await loadPageContext();
+});
+
+async function getTestToken() {
+ try {
+  const res = await fetch(API_URL + '/auth/test-token');
+  const data = await res.json();
+  return data.token;
+ } catch {
+  return null;
+ }
+}
