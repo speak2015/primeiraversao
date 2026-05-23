@@ -4,7 +4,7 @@
 //  A API key da Anthropic NUNCA aparece aqui — fica no backend.
 // ============================================================
 
-const API_URL = 'https://fraga-backend-production.up.railway.app'; //  ← troque depois do deploy
+const API_URL = 'https://fraga-backend-cPe6-production.up.railway.app';
 
 let currentTone   = 'auto';
 let pageContext   = null;
@@ -12,100 +12,35 @@ let isLoading     = false;
 
 // ── Inicialização ─────────────────────────────────────────────
 document.addEventListener('DOMContentLoaded', async () => {
-  const token = await getToken();
+  const token = await getTestToken();
   if (token) {
     await initChat(token);
   }
-  // Captura contexto da aba atual
   await loadPageContext();
 });
 
-// ── Armazenamento seguro do token ─────────────────────────────
-async function getToken() {
-  return new Promise(resolve => {
-    chrome.storage.local.get(['fraga_token'], result => {
-      resolve(result.fraga_token || null);
-    });
-  });
-}
-async function saveToken(token) {
-  return new Promise(resolve => {
-    chrome.storage.local.set({ fraga_token: token }, resolve);
-  });
-}
-async function clearToken() {
-  return new Promise(resolve => {
-    chrome.storage.local.remove(['fraga_token'], resolve);
-  });
-}
-
-// ── Auth: alternância login/cadastro ─────────────────────────
-let authMode = 'login';
-function switchTab(mode) {
-  authMode = mode;
-  document.getElementById('tab-login').classList.toggle('active', mode === 'login');
-  document.getElementById('tab-register').classList.toggle('active', mode === 'register');
-  document.getElementById('field-name').classList.toggle('hidden', mode === 'login');
-  document.getElementById('auth-btn').textContent = mode === 'login' ? 'Entrar' : 'Criar conta';
-  document.getElementById('auth-error').textContent = '';
-}
-
-async function handleAuth() {
-  const email    = document.getElementById('field-email').value.trim();
-  const password = document.getElementById('field-password').value;
-  const name     = document.getElementById('field-name').value.trim();
-  const btn      = document.getElementById('auth-btn');
-  const errEl    = document.getElementById('auth-error');
-
-  errEl.textContent = '';
-
-  if (!email || !password) { errEl.textContent = 'Preencha e-mail e senha.'; return; }
-  if (authMode === 'register' && !name) { errEl.textContent = 'Informe seu nome.'; return; }
-
-  btn.disabled = true;
-  btn.textContent = 'Aguarde...';
-
+// ── Pega token de teste (sem login) ───────────────────────────
+async function getTestToken() {
   try {
-    const endpoint = authMode === 'login' ? '/auth/login' : '/auth/register';
-    const body     = authMode === 'login'
-      ? { email, password }
-      : { email, password, name };
-
-    const res  = await fetch(API_URL + endpoint, {
-      method: 'POST',
-      headers: { 'Content-Type': 'application/json' },
-      body: JSON.stringify(body),
-    });
+    const res = await fetch(API_URL + '/auth/test-token');
     const data = await res.json();
-
-    if (!res.ok) {
-      errEl.textContent = data.error || 'Erro desconhecido.';
-      return;
-    }
-
-    await saveToken(data.token);
-    await initChat(data.token, data);
-
+    return data.token;
   } catch {
-    errEl.textContent = 'Erro de conexão. Verifique sua internet.';
-  } finally {
-    btn.disabled = false;
-    btn.textContent = authMode === 'login' ? 'Entrar' : 'Criar conta';
+    return null;
   }
 }
 
-// ── Inicia chat após login ─────────────────────────────────────
+// ── Inicia chat ────────────────────────────────────────────────
 async function initChat(token, userData = null) {
   document.getElementById('auth-screen').classList.add('hidden');
   document.getElementById('chat-screen').classList.remove('hidden');
 
   if (!userData) {
-    // Busca dados do usuário
     try {
       const res  = await fetch(API_URL + '/me', {
         headers: { Authorization: 'Bearer ' + token }
       });
-      if (!res.ok) { await clearToken(); location.reload(); return; }
+      if (!res.ok) { location.reload(); return; }
       userData = await res.json();
     } catch {
       addMessage('Erro ao conectar. Verifique sua internet.', 'error');
@@ -113,12 +48,10 @@ async function initChat(token, userData = null) {
     }
   }
 
-  // Exibe uso
   if (userData.usage_count !== undefined) {
     updateUsageDisplay(userData.usage_count, userData.usage_limit || 50);
   }
 
-  // Mensagem de boas-vindas
   const greeting = userData.name
     ? `Olá, ${userData.name.split(' ')[0]}! Como posso te ajudar hoje?`
     : 'Olá! Como posso te ajudar hoje?';
@@ -133,7 +66,6 @@ async function loadPageContext() {
 
     document.getElementById('page-url-display').textContent = tab.title || tab.url;
 
-    // Injeta script para pegar texto da página
     const results = await chrome.scripting.executeScript({
       target: { tabId: tab.id },
       func: () => ({
@@ -149,7 +81,6 @@ async function loadPageContext() {
         pageContext.title || pageContext.url;
     }
   } catch {
-    // Algumas páginas bloqueiam injeção de script (chrome://, etc.)
     document.getElementById('page-context-bar').classList.add('hidden');
   }
 }
@@ -168,8 +99,11 @@ async function sendMessage() {
   const text  = input.value.trim();
   if (!text) return;
 
-  const token = await getToken();
-  if (!token) { location.reload(); return; }
+  const token = await getTestToken();
+  if (!token) { 
+    addMessage('Erro ao obter token. Recarregue a extensão.', 'error');
+    return; 
+  }
 
   input.value = '';
   input.style.height = 'auto';
@@ -197,7 +131,6 @@ async function sendMessage() {
     removeTyping();
 
     if (res.status === 402) {
-      // Limite atingido
       document.getElementById('limit-bar').classList.remove('hidden');
       document.getElementById('send-btn').disabled = true;
       input.disabled = true;
@@ -264,22 +197,4 @@ function handleKey(e) {
 function autoResize(el) {
   el.style.height = 'auto';
   el.style.height = Math.min(el.scrollHeight, 100) + 'px';
-}
-document.addEventListener('DOMContentLoaded', async () => {
- // Pega token de teste
- const token = await getTestToken();
- if (token) {
-  await initChat(token);
- }
- await loadPageContext();
-});
-
-async function getTestToken() {
- try {
-  const res = await fetch(API_URL + '/auth/test-token');
-  const data = await res.json();
-  return data.token;
- } catch {
-  return null;
- }
 }
