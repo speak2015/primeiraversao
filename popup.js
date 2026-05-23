@@ -4,7 +4,7 @@
 //  A API key da Anthropic NUNCA aparece aqui — fica no backend.
 // ============================================================
 
-const API_URL = 'https://SEU-APP.railway.app'; // ← troque depois do deploy
+const API_URL = 'https://fraga-backend-production.up.railway.app'; //  ← troque depois do deploy
 
 let currentTone   = 'auto';
 let pageContext   = null;
